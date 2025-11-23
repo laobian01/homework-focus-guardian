@@ -5,9 +5,9 @@ import CameraFeed, { CameraHandle } from './components/CameraFeed';
 import StatusIndicator from './components/StatusIndicator';
 import StatsView from './components/StatsView';
 import VoiceRecorder from './components/VoiceRecorder';
-import { analyzeFrame } from './services/monitorService.ts';
-import { checkBadges } from './services/gamification.ts';
-import { FocusStatus, LogEntry, AnalysisResult, UserStats, Badge } from './types.ts';
+import { analyzeFrame } from './services/monitorService';
+import { checkBadges } from './services/gamification';
+import { FocusStatus, LogEntry, AnalysisResult, UserStats, Badge } from './types';
 
 const CHECK_INTERVAL_MS = 5000;
 
