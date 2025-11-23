@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, Square, History, LayoutDashboard, Home, Settings, Trophy, Activity } from 'lucide-react';
 import CameraFeed, { CameraHandle } from './components/CameraFeed';
@@ -40,9 +41,17 @@ function App() {
   
   const timerRef = useRef<number | null>(null);
   const lastCheckTimeRef = useRef<number>(Date.now());
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
-  // Load settings from local storage on mount
+  // Initialize voices
   useEffect(() => {
+    const loadVoices = () => {
+      voicesRef.current = window.speechSynthesis.getVoices();
+    };
+    // Voices are loaded asynchronously in some browsers
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+    
     const savedAudio = localStorage.getItem('custom_audio_blob');
     if (savedAudio) {
       setCustomAudio(savedAudio);
@@ -63,7 +72,6 @@ function App() {
   };
 
   // Modified speak function to accept an optional status override
-  // This fixes the bug where 'status' state was stale during the performCheck callback
   const speak = useCallback((text: string, overrideStatus?: FocusStatus) => {
     if (!audioEnabled) return;
 
@@ -86,9 +94,22 @@ function App() {
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'zh-CN'; 
-    // Attempt to improve mobile compatibility
-    utterance.rate = 1.0; 
-    utterance.pitch = 1.0;
+    
+    // Improved Voice Selection Logic
+    // Try to find a better sounding voice than the default robot
+    // Prioritize Google/Microsoft voices if available (common on Chrome Android/Windows)
+    const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => 
+        v.lang.includes('zh') && (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('Siri') || v.name.includes('Tingting'))
+    ) || voices.find(v => v.lang.includes('zh'));
+
+    if (preferredVoice) {
+        utterance.voice = preferredVoice;
+    }
+
+    // Adjust pitch and rate for a friendlier tone
+    utterance.rate = 0.95; // Slightly slower
+    utterance.pitch = 1.05; // Slightly higher/brighter
     
     window.speechSynthesis.speak(utterance);
   }, [audioEnabled, useCustomAudio, customAudio, status]);
@@ -137,8 +158,14 @@ function App() {
 
     lastCheckTimeRef.current = Date.now();
 
+    // captureFrame now returns null if camera isn't ready, preventing invalid API calls
     const frameBase64 = cameraRef.current.captureFrame();
-    if (!frameBase64) return;
+    
+    if (!frameBase64) {
+        // Skip this cycle if camera isn't ready
+        console.warn("Camera frame not ready");
+        return;
+    }
 
     try {
       const result: AnalysisResult = await analyzeFrame(frameBase64);
@@ -214,7 +241,7 @@ function App() {
     <div className={`flex flex-col h-full w-full max-w-md mx-auto bg-gradient-to-b ${getBackgroundClass()} transition-colors duration-700 ease-in-out shadow-2xl overflow-hidden relative font-sans text-gray-100`}>
       
       {/* Header */}
-      <header className="px-5 py-4 bg-gray-900/60 backdrop-blur-xl z-20 flex justify-between items-center border-b border-white/5 sticky top-0">
+      <header className="px-5 py-4 bg-gray-900/60 backdrop-blur-xl z-20 flex justify-between items-center border-b border-white/5 sticky top-0 shrink-0">
         <div className="flex items-center gap-2">
            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
              <Activity size={18} className="text-white" />
@@ -223,7 +250,6 @@ function App() {
              <h1 className="text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
               专注卫士
             </h1>
-            <p className="text-[10px] text-gray-400 tracking-wide uppercase">AI Focus Monitor</p>
            </div>
         </div>
         <div className="flex items-center gap-3">
@@ -237,7 +263,7 @@ function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 relative flex flex-col overflow-y-auto no-scrollbar pb-24">
+      <main className="flex-1 relative flex flex-col overflow-hidden">
         
         {/* Badge Notification Toast */}
         {newBadge && (
@@ -253,10 +279,11 @@ function App() {
         )}
 
         {view === 'monitor' && (
-          <div className="flex flex-col h-full p-4 space-y-6">
+          <div className="flex flex-col h-full p-4 space-y-4">
             
-            {/* Camera Section */}
-            <div className="relative w-full aspect-[4/3] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10 group">
+            {/* Camera Section - Enlarged */}
+            {/* Changed from fixed aspect ratio to taking up 50% of vertical screen space */}
+            <div className="relative w-full h-[50vh] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10 group shrink-0">
               <CameraFeed ref={cameraRef} onError={(err) => setErrorMsg(err)} />
               
               {/* Overlay Gradient */}
@@ -278,42 +305,46 @@ function App() {
               )}
             </div>
 
-            {/* Status & Controls */}
-            <div className="flex-1 flex flex-col items-center space-y-8">
-              <StatusIndicator status={status} message={lastMessage} />
+            {/* Status & Controls - Flex to fill remaining space */}
+            <div className="flex-1 flex flex-col space-y-4 min-h-0">
+              <div className="shrink-0">
+                  <StatusIndicator status={status} message={lastMessage} />
+              </div>
               
-              <button
-                onClick={toggleMonitoring}
-                className={`
-                  relative group flex items-center justify-center gap-3 px-10 py-5 rounded-full font-bold text-lg shadow-2xl transition-all duration-300 active:scale-95 w-full max-w-[240px]
-                  ${isMonitoring 
-                    ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30' 
-                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-transparent shadow-blue-500/20'
-                  }
-                `}
-              >
-                {isMonitoring ? (
-                  <>
-                    <Square className="w-5 h-5 fill-current" />
-                    <span className="tracking-wide">停止监控</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-5 h-5 fill-current" />
-                    <span className="tracking-wide">开始专注</span>
-                  </>
-                )}
-                {/* Button Glow Effect */}
-                {!isMonitoring && <div className="absolute inset-0 rounded-full bg-white/20 blur-md opacity-0 group-hover:opacity-50 transition-opacity"></div>}
-              </button>
+              <div className="flex justify-center shrink-0">
+                  <button
+                    onClick={toggleMonitoring}
+                    className={`
+                      relative group flex items-center justify-center gap-3 px-8 py-4 rounded-full font-bold text-lg shadow-xl transition-all duration-300 active:scale-95 w-full max-w-[200px]
+                      ${isMonitoring 
+                        ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30' 
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-transparent shadow-blue-500/20'
+                      }
+                    `}
+                  >
+                    {isMonitoring ? (
+                      <>
+                        <Square className="w-5 h-5 fill-current" />
+                        <span className="tracking-wide">停止</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-5 h-5 fill-current" />
+                        <span className="tracking-wide">开始</span>
+                      </>
+                    )}
+                    {/* Button Glow Effect */}
+                    {!isMonitoring && <div className="absolute inset-0 rounded-full bg-white/20 blur-md opacity-0 group-hover:opacity-50 transition-opacity"></div>}
+                  </button>
+              </div>
 
-              {/* Minimal Log View */}
-              <div className="w-full bg-gray-800/40 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden flex flex-col h-32">
-                 <div className="flex items-center gap-2 px-4 py-3 bg-white/5 border-b border-white/5">
+              {/* Log View - Scrollable area filling rest of space */}
+              <div className="flex-1 bg-gray-800/40 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden flex flex-col min-h-0">
+                 <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/5 shrink-0">
                    <History size={14} className="text-gray-400" />
                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">实时日志</span>
                  </div>
-                 <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                 <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                    {logs.length === 0 ? (
                      <p className="text-center text-gray-600 text-xs mt-2 italic">暂无记录...</p>
                    ) : (
@@ -334,38 +365,44 @@ function App() {
           </div>
         )}
 
-        {view === 'stats' && <StatsView stats={stats} />}
+        {view === 'stats' && (
+            <div className="h-full overflow-y-auto custom-scrollbar">
+                <StatsView stats={stats} />
+            </div>
+        )}
 
         {view === 'settings' && (
-            <div className="p-5 space-y-6 animate-in fade-in duration-300">
-                <h2 className="text-2xl font-bold text-white mb-2">设置</h2>
-                
-                {/* Audio Toggle */}
-                <div className="bg-gray-800/60 backdrop-blur-md p-5 rounded-2xl border border-white/5 flex items-center justify-between shadow-lg">
-                    <div className="space-y-1">
-                        <h3 className="font-bold text-gray-100">语音提示</h3>
-                        <p className="text-xs text-gray-400">开启后 AI 会语音提醒小朋友专注</p>
+            <div className="h-full overflow-y-auto custom-scrollbar">
+                <div className="p-5 space-y-6 animate-in fade-in duration-300 pb-24">
+                    <h2 className="text-2xl font-bold text-white mb-2">设置</h2>
+                    
+                    {/* Audio Toggle */}
+                    <div className="bg-gray-800/60 backdrop-blur-md p-5 rounded-2xl border border-white/5 flex items-center justify-between shadow-lg">
+                        <div className="space-y-1">
+                            <h3 className="font-bold text-gray-100">语音提示</h3>
+                            <p className="text-xs text-gray-400">开启后 AI 会语音提醒小朋友专注</p>
+                        </div>
+                        <button 
+                            onClick={() => setAudioEnabled(!audioEnabled)}
+                            className={`w-14 h-8 rounded-full transition-all duration-300 relative focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${audioEnabled ? 'bg-blue-600 shadow-inner' : 'bg-gray-700'}`}
+                        >
+                            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ${audioEnabled ? 'left-7' : 'left-1'}`}></div>
+                        </button>
                     </div>
-                    <button 
-                        onClick={() => setAudioEnabled(!audioEnabled)}
-                        className={`w-14 h-8 rounded-full transition-all duration-300 relative focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${audioEnabled ? 'bg-blue-600 shadow-inner' : 'bg-gray-700'}`}
-                    >
-                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ${audioEnabled ? 'left-7' : 'left-1'}`}></div>
-                    </button>
-                </div>
 
-                {/* Custom Voice Recorder */}
-                <div className={`transition-opacity duration-300 ${!audioEnabled ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-                    <VoiceRecorder 
-                        existingAudio={customAudio} 
-                        onSave={handleSaveAudio} 
-                    />
-                </div>
-                
-                <div className="mt-8 p-4 rounded-xl bg-blue-500/5 border border-blue-500/10">
-                    <p className="text-xs text-blue-300/80 text-center leading-relaxed">
-                        Tip: 建议将手机放置在侧前方，以便 AI 能清楚地看到小朋友写作业的状态。如果听不到声音，请检查手机是否开启了静音模式（如 iPhone 左侧的物理开关）。
-                    </p>
+                    {/* Custom Voice Recorder */}
+                    <div className={`transition-opacity duration-300 ${!audioEnabled ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                        <VoiceRecorder 
+                            existingAudio={customAudio} 
+                            onSave={handleSaveAudio} 
+                        />
+                    </div>
+                    
+                    <div className="mt-8 p-4 rounded-xl bg-blue-500/5 border border-blue-500/10">
+                        <p className="text-xs text-blue-300/80 text-center leading-relaxed">
+                            Tip: 建议将手机放置在侧前方，以便 AI 能清楚地看到小朋友写作业的状态。如果听不到声音，请检查手机是否开启了静音模式（如 iPhone 左侧的物理开关）。
+                        </p>
+                    </div>
                 </div>
             </div>
         )}
