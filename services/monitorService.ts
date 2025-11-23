@@ -1,9 +1,24 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnalysisResult, FocusStatus } from "../types";
 
-const apiKey = process.env.API_KEY; // API Key injected by environment
+// Remove top-level initialization to prevent crash on load
+// const apiKey = process.env.API_KEY; 
+// const ai = new GoogleGenAI({ apiKey: apiKey });
 
-const ai = new GoogleGenAI({ apiKey: apiKey });
+let ai: GoogleGenAI | null = null;
+
+const getAIClient = () => {
+  if (ai) return ai;
+
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    // This will be caught by the try-catch in analyzeFrame
+    throw new Error("API Key is missing. Please check Vercel settings.");
+  }
+
+  ai = new GoogleGenAI({ apiKey: apiKey });
+  return ai;
+};
 
 const responseSchema: Schema = {
   type: Type.OBJECT,
@@ -26,15 +41,14 @@ const responseSchema: Schema = {
 };
 
 export const analyzeFrame = async (base64Image: string): Promise<AnalysisResult> => {
-  if (!apiKey) {
-    throw new Error("API Key is missing.");
-  }
-
   // Remove data URL prefix if present
   const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
 
   try {
-    const response = await ai.models.generateContent({
+    // Initialize AI client here, inside the function
+    const client = getAIClient();
+
+    const response = await client.models.generateContent({
       model: "gemini-2.5-flash",
       contents: {
         parts: [
@@ -69,11 +83,13 @@ export const analyzeFrame = async (base64Image: string): Promise<AnalysisResult>
     const result = JSON.parse(text) as AnalysisResult;
     return result;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Analysis failed:", error);
+    
+    // Return a structured error that the UI can display
     return {
       status: FocusStatus.ERROR,
-      message: "Analysis failed",
+      message: error.message || "连接 AI 失败",
       confidence: 0
     };
   }
