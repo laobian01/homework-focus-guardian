@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnalysisResult, FocusStatus } from "../types";
 
@@ -41,7 +42,11 @@ const responseSchema: Schema = {
 };
 
 export const analyzeFrame = async (base64Image: string): Promise<AnalysisResult> => {
-  // Remove data URL prefix if present
+  // CRITICAL FIX: Handle empty or invalid base64 strings gracefully before calling API
+  if (!base64Image || base64Image === "data:," || base64Image.length < 100) {
+    throw new Error("Invalid frame captured (empty data)");
+  }
+
   const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
 
   try {
@@ -86,6 +91,11 @@ export const analyzeFrame = async (base64Image: string): Promise<AnalysisResult>
   } catch (error: any) {
     console.error("Analysis failed:", error);
     
+    // Don't treat "Invalid frame" as a critical AI connection error, it's transient
+    if (error.message === "Invalid frame captured (empty data)") {
+        throw error;
+    }
+
     // Return a structured error that the UI can display
     return {
       status: FocusStatus.ERROR,
