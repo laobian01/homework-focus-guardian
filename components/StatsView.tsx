@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { UserStats, Badge } from '../types.ts';
-import { BADGES, getLeaderboard, calculateDailyScore } from '../services/gamification.ts';
+import { UserStats, Badge } from '../types';
+import { BADGES, getLeaderboard, calculateDailyScore } from '../services/gamification';
 import { Trophy, Star, Clock, Target, Lock, Medal } from 'lucide-react';
 
 interface StatsViewProps {
