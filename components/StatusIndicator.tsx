@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FocusStatus } from '../types.ts';
+import { FocusStatus } from '../types';
 import { CheckCircle2, AlertTriangle, UserX, Activity, BrainCircuit } from 'lucide-react';
 
 interface StatusIndicatorProps {
