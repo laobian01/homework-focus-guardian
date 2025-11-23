@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { AnalysisResult, FocusStatus } from "../types.ts";
+import { AnalysisResult, FocusStatus } from "../types";
 
 // Remove top-level initialization to prevent crash on load
 // const apiKey = process.env.API_KEY; 
