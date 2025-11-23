@@ -1,5 +1,5 @@
 
-import { Badge, UserStats, LeaderboardEntry } from "../types.ts";
+import { Badge, UserStats, LeaderboardEntry } from "../types";
 
 export const BADGES: Badge[] = [
   {
