@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Mic, Square, Play, Trash2, Save } from 'lucide-react';
+import { Mic, Square, Play, Trash2, Save, Volume2 } from 'lucide-react';
 
 interface VoiceRecorderProps {
-  onSave: (audioBlob: string) => void; // Passing base64 string
+  onSave: (audioBlob: string) => void; 
   existingAudio: string | null;
 }
 
@@ -16,7 +16,6 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSave, existingAudio }) 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Feature detection for mobile compatibility (iOS Safari vs Android Chrome)
       let options: MediaRecorderOptions | undefined = undefined;
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         options = { mimeType: 'audio/webm;codecs=opus' };
@@ -24,25 +23,17 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSave, existingAudio }) 
         options = { mimeType: 'audio/mp4' };
       }
       
-      // Initialize recorder with best supported options or default
-      const recorder = options 
-        ? new MediaRecorder(stream, options) 
-        : new MediaRecorder(stream);
-        
+      const recorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
+        if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
       recorder.onstop = () => {
-        // Use the actual mime type of the recording for the Blob
         const blobType = recorder.mimeType || 'audio/webm'; 
         const blob = new Blob(chunksRef.current, { type: blobType });
-        
         const reader = new FileReader();
         reader.readAsDataURL(blob);
         reader.onloadend = () => {
@@ -50,8 +41,6 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSave, existingAudio }) 
           setAudioUrl(base64data);
           onSave(base64data);
         };
-        
-        // Stop all tracks to release mic and turn off the red dot
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -79,52 +68,85 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSave, existingAudio }) 
 
   const deleteRecording = () => {
     setAudioUrl(null);
-    onSave(""); // Clear in parent
+    onSave(""); 
   };
 
   return (
-    <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-      <h3 className="text-white font-bold mb-3 flex items-center gap-2">
-        <Mic className="w-4 h-4 text-blue-400" />
+    <div className="bg-gray-800/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 shadow-lg relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <h3 className="text-white font-bold mb-4 flex items-center gap-2 relative z-10">
+        <div className="p-1.5 rounded-lg bg-blue-500/20">
+            <Mic className="w-4 h-4 text-blue-400" />
+        </div>
         自定义提醒语音
       </h3>
       
-      <div className="flex items-center justify-between gap-4">
-        {isRecording ? (
-          <button
-            onClick={stopRecording}
-            className="flex-1 flex items-center justify-center gap-2 bg-red-500/20 text-red-500 border border-red-500/50 py-3 rounded-lg animate-pulse"
-          >
-            <Square size={18} fill="currentColor" />
-            <span>停止录音...</span>
-          </button>
-        ) : (
-          <button
-            onClick={startRecording}
-            className="flex-1 flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg transition-colors"
-          >
-            <Mic size={18} />
-            <span>{audioUrl ? '重新录制' : '点击录制'}</span>
-          </button>
+      <div className="space-y-4 relative z-10">
+        {/* Main Action Button */}
+        <div className="flex justify-center">
+            {isRecording ? (
+            <button
+                onClick={stopRecording}
+                className="w-full py-4 rounded-xl flex items-center justify-center gap-3 bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse transition-all"
+            >
+                <div className="p-1 bg-white/20 rounded-md">
+                    <Square size={16} fill="currentColor" />
+                </div>
+                <span className="font-bold">停止录音</span>
+            </button>
+            ) : (
+            <button
+                onClick={startRecording}
+                className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 transition-all duration-300 font-bold ${
+                    audioUrl 
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 hover:scale-[1.02]'
+                }`}
+            >
+                <Mic size={20} />
+                <span>{audioUrl ? '重新录制' : '点击开始录制'}</span>
+            </button>
+            )}
+        </div>
+
+        {/* Audio Player Card */}
+        {audioUrl && !isRecording && (
+            <div className="bg-black/30 p-4 rounded-xl border border-white/5 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2">
+            <button 
+                onClick={playRecording} 
+                className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white hover:bg-blue-400 transition-colors shadow-lg shadow-blue-500/30"
+            >
+                <Play size={18} fill="currentColor" className="ml-0.5" />
+            </button>
+            
+            <div className="flex-1 flex flex-col justify-center gap-1">
+                <span className="text-xs font-bold text-gray-300">已保存的录音</span>
+                <div className="h-1 w-full bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-full w-2/3 bg-blue-500 rounded-full"></div>
+                </div>
+            </div>
+
+            <button 
+                onClick={deleteRecording} 
+                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                title="删除"
+            >
+                <Trash2 size={18} />
+            </button>
+            </div>
         )}
       </div>
-
-      {audioUrl && !isRecording && (
-        <div className="mt-4 flex items-center gap-2 bg-gray-900/50 p-3 rounded-lg">
-          <button onClick={playRecording} className="p-2 bg-blue-500 rounded-full hover:bg-blue-600 text-white">
-            <Play size={16} fill="currentColor" />
-          </button>
-          <span className="flex-1 text-xs text-gray-400 ml-2">已保存的录音</span>
-          <button onClick={deleteRecording} className="p-2 text-gray-500 hover:text-red-400">
-            <Trash2 size={16} />
-          </button>
-        </div>
-      )}
       
-      <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-        录制一段爸爸或妈妈的声音，比如："宝贝，要专心写作业哦！"。
-        <br/><span className="text-gray-600">* iOS设备请取消静音模式以播放声音。</span>
-      </p>
+      <div className="mt-5 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+        <p className="text-[11px] text-gray-400 leading-relaxed flex gap-2">
+            <Volume2 size={14} className="shrink-0 mt-0.5 text-blue-400" />
+            <span>
+                录制一段亲切的语音（如"宝贝加油"），当检测到分心时，APP会优先播放这段录音，而不是机器人的声音。
+            </span>
+        </p>
+      </div>
     </div>
   );
 };
